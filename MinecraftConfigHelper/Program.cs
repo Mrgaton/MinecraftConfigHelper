@@ -1,11 +1,11 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace MinecraftConfigHelper
@@ -14,96 +14,92 @@ namespace MinecraftConfigHelper
     {
         private static void Main(string[] args)
         {
-            bool StringReplaced = false;
+            bool stringReplaced = false;
 
-            string FilePath = GetArg(args, 0);
+            string fileType = GetArg(args, 0).ToLower();
 
-            if (!string.IsNullOrEmpty(FilePath)) if (!File.Exists(FilePath))
-                {
-                    File.Create(FilePath).Close();
-                }
+            string filePath = GetArg(args, 1);
 
-            string FileType = GetArg(args, 1);
+            if (!string.IsNullOrEmpty(filePath) && !File.Exists(filePath)) File.Create(filePath).Close();
 
-            string Key = GetArg(args, 2);
+            //string key = GetArg(args, 2);
 
-            string Value = GetValue(args).Replace("\\\"", "\"").Replace("\\\\", "\\");
+            string value = GetValue(args, 2).Replace("\\\"", "\"").Replace("\\\\", "\\");
 
-            if (FileType.ToLower() == "casual")
+            if (fileType == "casual")
             {
-                StringBuilder Output = new StringBuilder();
+                StringBuilder output = new StringBuilder();
 
-                foreach (string Line in File.ReadAllText(FilePath).Split('\n'))
+                foreach (string line in File.ReadAllText(filePath).Split('\n'))
                 {
-                    if (string.IsNullOrWhiteSpace(Line.Trim())) continue;
+                    if (string.IsNullOrWhiteSpace(line.Trim())) continue;
 
-                    if (Line.Trim().StartsWith(Key))
+                    if (line.Trim().StartsWith(value.Split(':')[0]))
                     {
-                        if (!StringReplaced) Output.AppendLine(Key + ":" + Value);
+                        if (!stringReplaced) output.AppendLine(value);
 
-                        StringReplaced = true;
+                        stringReplaced = true;
 
                         continue;
                     }
 
-                    Output.AppendLine(Line.Trim());
+                    output.AppendLine(line.Trim());
                 }
 
-                if (!StringReplaced) Output.AppendLine(Key + ":" + Value);
+                if (!stringReplaced) output.AppendLine(value);
 
-                File.WriteAllText(FilePath, Output.ToString(), new UTF8Encoding(false));
+                File.WriteAllText(filePath, output.ToString(), new UTF8Encoding(false));
 
                 return;
             }
-
-            if (FileType.ToLower() == "setprofile")
+            else if (fileType == "setprofile")
             {
-                string SpacenName = args[2];
-                Key = args[3];
-                Value = args[4];
+                string spacenName = args[2];
 
-                string Json = File.ReadAllText(FilePath);
-                JsonNode Node = JsonNode.Parse(Json);
+                string key = args[3];
+                value = args[4];
 
-                foreach (var Element in (dynamic)Node["profiles"])
+                JObject node = JObject.Parse(File.ReadAllText(filePath));
+
+                foreach (var Element in (dynamic)node["profiles"])
                 {
                     try
                     {
-                        if (Node["profiles"][Element.Key]["lastVersionId"].ToString() == SpacenName)
+                        if (node["profiles"][Element.key]["lastVersionId"].ToString() == spacenName)
                         {
-                            StringReplaced = true;
-                            Node["profiles"][Element.Key][Key] = Value;
+                            stringReplaced = true;
+                            node["profiles"][Element.key][key] = value;
                             break;
                         }
                     }
                     catch { }
                 }
 
-                if (!StringReplaced)
+                if (!stringReplaced)
                 {
                     Console.WriteLine("Error finding namespace :C");
                     return;
                 }
 
-                File.WriteAllText(FilePath, ReplaceUnicode(Node.ToString()));
+                File.WriteAllText(filePath, ReplaceUnicode(node.ToString()));
                 return;
             }
-
-            if (FileType.ToLower() == "deleteprofile")
+            else if (fileType == "deleteprofile")
             {
-                string SpacenName = args[2];
-                string Json = File.ReadAllText(FilePath);
+                string spacenName = args[2];
+                string json = File.ReadAllText(filePath);
 
-                JsonNode Node = JsonNode.Parse(Json);
+                JObject node = JObject.Parse(json);
+
                 string ProfileToDelete = null;
 
-                foreach (var Element in (dynamic)Node["profiles"])
+                foreach (var Element in (dynamic)node["profiles"])
                 {
                     try
                     {
-                        if (Node["profiles"][Element.Key]["lastVersionId"].ToString() == SpacenName)
+                        if (node["profiles"][Element.key]["lastVersionId"].ToString() == spacenName)
                         {
-                            ProfileToDelete = Element.Key;
+                            ProfileToDelete = Element.key;
                         }
                     }
                     catch { }
@@ -111,57 +107,56 @@ namespace MinecraftConfigHelper
 
                 if (ProfileToDelete == null) return;
 
-                ((dynamic)(Node["profiles"])).Remove(ProfileToDelete);
+                ((dynamic)node["profiles"]).Remove(ProfileToDelete);
 
-                File.WriteAllText(FilePath, ReplaceUnicode(Node.ToString()), new UTF8Encoding(false));
+                File.WriteAllText(filePath, ReplaceUnicode(node.ToString()), new UTF8Encoding(false));
                 return;
             }
-
-            if (FileType.ToLower() == "getfabric")
+            else if (fileType == "getfabric")
             {
-                JsonNode Json = JsonNode.Parse(new WebClient().DownloadString("https://meta.fabricmc.net/v2/versions/loader"));
+                JArray json = JArray.Parse(new WebClient().DownloadString("https://meta.fabricmc.net/v2/versions/loader"));
 
-                Dictionary<string, bool> Versions = new Dictionary<string, bool>();
-                foreach (var Element in (dynamic)Json)
+                Dictionary<string, bool> versions = new Dictionary<string, bool>();
+
+                foreach (var Element in (dynamic)json)
                 {
                     try
                     {
-                        Versions.Add(Element["version"].ToString(), bool.Parse(Element["stable"].ToString()));
+                        versions.Add(Element["version"].ToString(), bool.Parse(Element["stable"].ToString()));
                     }
                     catch { }
                 }
-                Versions.OrderBy(Ver => Ver);
 
-                Console.Write(Versions.Where(Ver => Ver.Value).First().Key);
+                versions.OrderBy(ver => ver);
+
+                Console.Write(versions.Where(ver => ver.Value).First().Key);
                 return;
             }
 
             Console.WriteLine("Invalid arguments ._.");
         }
 
-        private static string ReplaceUnicode(string Input) => Regex.Replace(Input, @"\\u([0-9a-fA-F]{4})", m => char.ToString((char)ushort.Parse(m.Groups[1].Value, NumberStyles.HexNumber)));
+        private static string ReplaceUnicode(string input) => Regex.Replace(input, @"\\u([0-9a-fA-F]{4})", m => char.ToString((char)ushort.Parse(m.Groups[1].Value, NumberStyles.HexNumber)));
 
-        private static string GetArg(string[] args, int Index)
+        private static string GetArg(string[] args, int index)
         {
-            if (args.Length > Index)
-            {
-                return args[Index];
-            }
+            if (args.Length > index) return args[index];
+
             return null;
         }
 
-        private static string GetValue(string[] args)
+        private static string GetValue(string[] args, int index = 2)
         {
-            if (args.Length <= 3) return "";
+            if (args.Length <= index) return "";
 
-            StringBuilder Output = new StringBuilder();
+            StringBuilder output = new StringBuilder();
 
-            for (int i = 3; i < args.Length; i++)
+            for (int i = index; i < args.Length; i++)
             {
-                Output.Append(args[i] + " ");
+                output.Append(args[i] + " ");
             }
 
-            return Output.ToString().Trim();
+            return output.ToString().Trim();
         }
     }
 }
