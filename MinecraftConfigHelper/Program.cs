@@ -24,10 +24,10 @@ namespace MinecraftConfigHelper
 
             //string key = GetArg(args, 2);
 
-            string value = GetValue(args, 2).Replace("\\\"", "\"").Replace("\\\\", "\\");
-
             if (fileType == "casual")
             {
+                string value = GetValue(args, 2).Replace("\\\"", "\"").Replace("\\\\", "\\");
+
                 StringBuilder output = new StringBuilder();
 
                 foreach (string line in File.ReadAllText(filePath).Split('\n'))
@@ -57,18 +57,20 @@ namespace MinecraftConfigHelper
                 string spacenName = args[2];
 
                 string key = args[3];
-                value = args[4];
+                string value = args[4];
 
                 JObject node = JObject.Parse(File.ReadAllText(filePath));
 
-                foreach (var Element in (dynamic)node["profiles"])
+
+                foreach (var element in (JObject)node["profiles"])
                 {
                     try
                     {
-                        if (node["profiles"][Element.key]["lastVersionId"].ToString() == spacenName)
+                        if (node["profiles"][element.Key]["lastVersionId"].ToString() == spacenName)
                         {
+                            Console.WriteLine("Replaced at " + element.Key);
                             stringReplaced = true;
-                            node["profiles"][Element.key][key] = value;
+                            node["profiles"][element.Key][key] = value;
                             break;
                         }
                     }
